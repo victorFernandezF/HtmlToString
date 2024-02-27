@@ -9,7 +9,7 @@ The conversion script iterates through each HTML element, including the opening 
 
 ## Clone Repository
  ~~~~
- haha
+ git clone https://github.com/victorFernandezF/HtmlToString.git
  ~~~~
 
 ## Usage
