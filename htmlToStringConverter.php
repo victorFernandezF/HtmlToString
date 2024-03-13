@@ -1,56 +1,109 @@
 <?php
 
+/** Ask user for input path and concatenation character */
 function askUser(){
-    echo "Input file (empty for default): ";
-    $inputPath = readline();
-    echo "Output file (empty for default): ";
-    $outputPath = readline();
-    echo "concatenation character (default +): ";
+    echo "\nWELCOME TO HTMLTOSTRING\n";
+    echo " • Please provide the input file path (or leave it empty for the default):";
+    $result['input'] = readline();
+    echo " • Please provide the concatenation character (or leave it empty for the default [+]): ";
     $concatChar = readline();
     echo "\n";
     $directory = getcwd();
-    $result['dir'] = $directory; 
-    $result['input'] = $inputPath ? realPath($inputPath) : $directory."/input.txt";
-    $result['output'] = $outputPath ? realPath($outputPath) :  $directory."/output.txt";
     $result['concat'] = $concatChar ? $concatChar : "+";
     return $result;
 }
 
-function createFile($filePath, $directory, $type){
+/** Open the input file. */
+function openInputFile($filePath){
     $file = new SplFileInfo($filePath);
-    if (!$file->isFile()){
-        if ($filePath == $directory."/input.txt" || $filePath == $directory."/output.txt")
-            if (touch($filePath))
-                exit("input.txt file has been created in $filePath . Pleas insert your HTML code in it.\n ");
-            else
-                throw new Exception("Error creating $type file. Try another one or use the default $type\n ", 1);
-    }
-    return $type == "input" ? new SplFileObject($filePath) : new SplFileObject($filePath, "w");
+    if (!$file->isFile())
+        throw new Exception("ERROR: File nont found ($filePath))");
+    return new SplFileObject($filePath);
 }
 
-function makeConversion($input, $output, $datas){
-    while (!$input->eof()) {
-        $line = $input->fgets();
+/** Create the output file. */
+function createOutputFile($filePath){
+    $file = new SplFileInfo($filePath);
+    if ($file->isFile())
+        unlink($filePath);
+
+    if (!$file->isFile())
+        if (!touch($filePath))
+            throw new Exception("Error: fail to create output file.\n ");
+    return new SplFileObject($filePath, "w");
+}
+
+function adaptSlashes($path){
+    return str_replace("\\", "/", $path);
+}
+
+/** Cretae Default files.*/
+function createDefaultFiles(){
+    $inputPath = "./input.txt";
+    $outputPath = "./output.txt";
+
+    $input = new SplFileInfo($inputPath);
+    $output = new SplFileInfo($outputPath);
+    
+    if ($output->isFile())
+        unlink($outputPath);
+
+    if (!$output->isFile())
+        if (!touch($outputPath))
+            throw new Exception("ERROR: fail to create output file.\n ", 1);
+    
+    if (!$input->isFile())
+        if (touch($inputPath))
+            die("input.txt file has been created in ($inputPath). Pleas insert your HTML code in it and execute the script again\n ");
+    else
+        throw new Exception("Error creating input file.\n ", 1); 
+
+    $files['inputPath'] = $inputPath;
+    $files['outputPath'] = $outputPath;
+    $files['default'] = true;
+    $files['input'] = new SplFileObject($inputPath);
+    $files['output'] = new SplFileObject($outputPath, "w");
+    return $files;
+}
+
+/** Conversion. Wrap each line in quotes and add the concat char at the end.*/
+function makeConversion($files){
+    while (!$files['input']->eof()) {
+        $line = $files['input']->fgets();
         $line = rtrim($line, "\r\n");
         $line = str_replace("'", "\"", $line);
-        if (!$input->valid())
+        if (!$files['input']->valid())
             $convertedLine = "'".$line."'";
         else 
-            $convertedLine = "'".$line."'".$datas['concat']."\n";
-        $output->fwrite($convertedLine);
+            $convertedLine = "'".$line."'".$files['concat']."\n";
+        $files['output']->fwrite($convertedLine);
     }
-    $input = null;
-    $output = null;
-    exit("Conversion successfully.\nYour result is in ".$datas['output']."\n ");
+    $files['input'] = null;
+    $files['output'] = null;
+    return 0;
 }
 
+// Execution starts here.
 try{
     $datas = askUser();
-    $input = createFile($datas['input'], $datas['dir'], "input");
-    if ($input->getSize() <= 0)
-        throw new Exception("Error: input file is empty. Make sure you place your text in ".$datas['input']."\n ");
-    $output = createFile($datas['output'], $datas['dir'], "output");
-    makeConversion($input, $output, $datas);
+    if ($datas['input']){
+        $inputPath = adaptSlashes($datas['input']);
+        $files['inputPath'] = $inputPath;
+        $files['input'] = openInputFile($inputPath);
+        $files['outputPath'] = (dirname($inputPath)."/output.txt");
+        $files['output'] = createOutputFile($files['outputPath']);
+    } else {
+       $files = createDefaultFiles();
+       $input = $files['input'];
+       $output = $files['output'];
+    }
+    $files['concat'] = $datas['concat'];
+    if ($files['input']->getSize() <= 0)
+        throw new Exception("  Input file is empty. Make sure you place your text in it.\n\n");
+    if (makeConversion($files) != 0)
+        throw new Eception("ERROR: fail to convert. Sorry try again\n");
+    if (isset($files['default'])) unlink($files['inputPath']);
+    die("SUCCESS.\n  Your result is in ".$files['outputPath']."\n\nThanks for using htmlToString.\n\n");
 }catch(Exception $e){
     echo $e->getMessage();
 }
